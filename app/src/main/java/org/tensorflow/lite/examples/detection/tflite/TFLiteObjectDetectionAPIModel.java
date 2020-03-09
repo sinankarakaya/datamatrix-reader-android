@@ -346,7 +346,7 @@ public class TFLiteObjectDetectionAPIModel implements Classifier {
     } catch (Exception e) {
       return null;
     }
-     */
+    */
     Frame frame = new Frame.Builder().setBitmap(bMap).build();
     SparseArray<Barcode> barcodes =CameraActivity.barcodeDetector.detect(frame);
     if(barcodes.size()>0) {

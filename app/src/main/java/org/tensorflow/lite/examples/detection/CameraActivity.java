@@ -21,6 +21,10 @@ import android.app.Fragment;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.hardware.Camera;
+import android.hardware.Sensor;
+import android.hardware.SensorManager;
+import android.hardware.TriggerEvent;
+import android.hardware.TriggerEventListener;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
@@ -104,6 +108,8 @@ public abstract class CameraActivity extends AppCompatActivity implements OnImag
   public static final String server = "https://eczatrend.com/";
   private RestInterfaces restInterfaces;
   public static BarcodeDetector barcodeDetector;
+  public static SensorManager sensorManager;
+  public static Sensor sensor;
 
   @Override
   protected void onCreate(final Bundle savedInstanceState) {
@@ -114,6 +120,11 @@ public abstract class CameraActivity extends AppCompatActivity implements OnImag
       Log.e("OpenCv", "Unable to load OpenCV");
     else
       Log.d("OpenCv", "OpenCV loaded");
+
+    sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+    sensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+
+
 
     barcodeDetector = new BarcodeDetector.Builder(getApplicationContext()).setBarcodeFormats(Barcode.DATA_MATRIX ).build();
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);

@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "16112502411",
+    "firebase_url": "https://sinankarakaya-7782a.firebaseio.com",
+    "project_id": "sinankarakaya-7782a",
+    "storage_bucket": "sinankarakaya-7782a.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:16112502411:android:7199dd7d915c9147de768e",
+        "android_client_info": {
+          "package_name": "com.eria.barcode.detection"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "16112502411-c8nspp14dtu07gatm9krtpcpaue11ijd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA9AcGGul-NvokYCEKKjovZrVNKxo0xRlE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "16112502411-c8nspp14dtu07gatm9krtpcpaue11ijd.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "16112502411-380jd552m515susef8eit0oinsb990ia.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "org.tensorflow.ObjectDetection"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

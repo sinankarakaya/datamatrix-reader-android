@@ -18,27 +18,9 @@ package org.tensorflow.lite.examples.detection.tflite;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.ColorMatrix;
-import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Matrix;
-import android.graphics.Paint;
 import android.graphics.RectF;
 import android.os.Trace;
-import android.util.SparseArray;
-import android.widget.ImageView;
-
-import com.google.android.gms.vision.Frame;
-import com.google.android.gms.vision.barcode.Barcode;
-import com.google.zxing.BinaryBitmap;
-import com.google.zxing.DecodeHintType;
-import com.google.zxing.LuminanceSource;
-import com.google.zxing.RGBLuminanceSource;
-import com.google.zxing.Result;
-import com.google.zxing.common.HybridBinarizer;
-import com.google.zxing.datamatrix.DataMatrixReader;
-
 import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -50,27 +32,11 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.Vector;
-
-import org.opencv.android.Utils;
-import org.opencv.core.Core;
-import org.opencv.core.CvType;
-import org.opencv.core.Mat;
-import org.opencv.core.MatOfDouble;
-import org.opencv.core.Rect;
-import org.opencv.core.Scalar;
-import org.opencv.core.Size;
-import org.opencv.imgproc.CLAHE;
-import org.opencv.imgproc.Imgproc;
-import org.opencv.photo.Photo;
 import org.tensorflow.lite.Interpreter;
-import org.tensorflow.lite.examples.detection.CameraActivity;
 import org.tensorflow.lite.examples.detection.DetectorActivity;
-import org.tensorflow.lite.examples.detection.env.ImageUtils;
 import org.tensorflow.lite.examples.detection.env.Logger;
 
 /**
@@ -237,23 +203,10 @@ public class TFLiteObjectDetectionAPIModel implements Classifier {
       final RectF detection = new RectF(outputLocations[0][i][1] * inputSize, outputLocations[0][i][0] * inputSize, outputLocations[0][i][3] * inputSize, outputLocations[0][i][2] * inputSize);
       int labelOffset = 1;
 
-      if(outputScores[0][i]>0.1f){
+      if(outputScores[0][i]>0.5f){
         Matrix matrix = DetectorActivity.getTransformMatrix();
         matrix.mapRect(detection);
-
-        Bitmap dataMatrix = getCropBitmap(originalBitmap, detection,false);
-        String result = decode(dataMatrix);
-        if (result != null) {
-          CameraActivity.addBarcode(result);
-          recognitions.add(new Recognition( result, labels.get((int) outputClasses[0][i] + labelOffset),1f, detection));
-        }else{
-           dataMatrix = getCropBitmap(originalBitmap, detection,true);
-           result = decode(dataMatrix);
-           if (result != null) {
-             CameraActivity.addBarcode(result);
-             recognitions.add(new Recognition(result, labels.get((int) outputClasses[0][i] + labelOffset),1f, detection));
-           }
-       }
+        recognitions.add(new Recognition( "", labels.get((int) outputClasses[0][i] + labelOffset),1f, detection));
       }
     }
     //Trace.endSection(); // "recognizeImage"
@@ -279,85 +232,6 @@ public class TFLiteObjectDetectionAPIModel implements Classifier {
   public void setUseNNAPI(boolean isChecked) {
     if (tfLite != null) tfLite.setUseNNAPI(isChecked);
   }
-
-
-
-  private static Bitmap getCropBitmap(Bitmap source, RectF cropRectF,boolean threshold) {
-    float width=0;
-    float height=0;
-
-    if(cropRectF.width()+75<source.getWidth())
-      width=cropRectF.width()+75;
-    else
-      width=source.getWidth();
-
-    if(cropRectF.height()+75<source.getHeight())
-      height=cropRectF.height()+75;
-    else
-      height=source.getHeight();
-
-    Bitmap resultBitmap = Bitmap.createBitmap((int) width, (int)height, Bitmap.Config.ARGB_8888);
-    Canvas cavas = new Canvas(resultBitmap);
-
-    Paint paint = new Paint(Paint.FILTER_BITMAP_FLAG);
-    paint.setColor(Color.WHITE);
-
-    cavas.drawRect(new RectF(0, 0, width, height), paint);
-
-    Matrix matrix = new Matrix();
-    matrix.postTranslate(-cropRectF.left+50, -cropRectF.top+50);
-    cavas.drawBitmap(source, matrix, paint);
-
-
-    if(threshold) {
-      Mat imageMat = new Mat();
-      Utils.bitmapToMat(resultBitmap, imageMat);
-      Imgproc.cvtColor(imageMat, imageMat, Imgproc.COLOR_BGR2GRAY);
-      Core.normalize(imageMat, imageMat, 0, 255, Core.NORM_MINMAX);
-      //CLAHE clahe = Imgproc.createCLAHE(2.0, new Size(2, 2));
-      //clahe.apply(imageMat, imageMat);
-      Mat kernel = new Mat(new Size(1, 1), CvType.CV_8U, new Scalar(255));
-      Imgproc.morphologyEx(imageMat, imageMat, Imgproc.MORPH_OPEN, kernel);
-      Imgproc.morphologyEx(imageMat, imageMat, Imgproc.MORPH_CLOSE, kernel);
-
-      //Imgproc.threshold(imageMat, imageMat, 127, 255,Imgproc.THRESH_BINARY|Imgproc.THRESH_OTSU);
-      Imgproc.adaptiveThreshold(imageMat, imageMat, 255, Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C,Imgproc.THRESH_BINARY, 41, 20);
-
-      Utils.matToBitmap(imageMat, resultBitmap);
-    }
-
-    return resultBitmap;
-  }
-
-  private static String decode(Bitmap bMap){
-    /*
-    int[] intArray = new int[bMap.getWidth()*bMap.getHeight()];
-    bMap.getPixels(intArray, 0, bMap.getWidth(), 0, 0, bMap.getWidth(), bMap.getHeight());
-    LuminanceSource source = new RGBLuminanceSource(bMap.getWidth(), bMap.getHeight(), intArray);
-    BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(source));
-
-    DataMatrixReader reader = new DataMatrixReader();
-    Hashtable<DecodeHintType,Object> hints = new Hashtable<>();
-    hints.put(DecodeHintType.TRY_HARDER,Boolean.TRUE);
-
-    try {
-      Result result = reader.decode(bitmap,hints);
-      return result.getText();
-    } catch (Exception e) {
-      return null;
-    }
-    */
-    Frame frame = new Frame.Builder().setBitmap(bMap).build();
-    SparseArray<Barcode> barcodes =CameraActivity.barcodeDetector.detect(frame);
-    if(barcodes.size()>0) {
-      Barcode thisCode = barcodes.valueAt(0);
-      System.out.print(thisCode.rawValue);
-      return thisCode.rawValue;
-    }else{
-      return null;
-    }
-  }
-
 
 
 

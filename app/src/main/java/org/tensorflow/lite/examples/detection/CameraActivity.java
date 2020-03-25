@@ -111,6 +111,10 @@ public abstract class CameraActivity extends AppCompatActivity implements OnImag
   public static SensorManager sensorManager;
   public static Sensor sensor;
 
+  static {
+    System.loadLibrary("NativeImageProcessor");
+  }
+
   @Override
   protected void onCreate(final Bundle savedInstanceState) {
     LOGGER.d("onCreate " + this);

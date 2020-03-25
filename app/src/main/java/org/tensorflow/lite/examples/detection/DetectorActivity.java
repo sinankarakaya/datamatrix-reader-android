@@ -44,6 +44,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -60,6 +61,7 @@ import org.tensorflow.lite.examples.detection.customview.OverlayView.DrawCallbac
 import org.tensorflow.lite.examples.detection.env.BorderedText;
 import org.tensorflow.lite.examples.detection.env.ImageUtils;
 import org.tensorflow.lite.examples.detection.env.Logger;
+import org.tensorflow.lite.examples.detection.env.ScaleImage;
 import org.tensorflow.lite.examples.detection.tflite.Classifier;
 import org.tensorflow.lite.examples.detection.tflite.TFLiteObjectDetectionAPIModel;
 import org.tensorflow.lite.examples.detection.tracking.MultiBoxTracker;
@@ -74,7 +76,9 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
     private static final String TF_OD_API_LABELS_FILE = "file:///android_asset/labelmap.txt";
     private static final DetectorMode MODE = DetectorMode.TF_OD_API;
     private static final boolean MAINTAIN_ASPECT = false;
-    private static final Size DESIRED_PREVIEW_SIZE = new Size(3264, 1836 );
+    //private static final Size DESIRED_PREVIEW_SIZE = new Size(3264, 1836 );
+    private static final Size DESIRED_PREVIEW_SIZE = new Size(1920, 1080 );
+
     public static float desireScreenRate=0;
 
     private static final float TEXT_SIZE_DIP = 10;
@@ -98,25 +102,6 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
     public ScheduledExecutorService scheduleTaskExecutor;
     final AtomicBoolean clear = new AtomicBoolean(false);
 
-    public void createClearTimer(){
-        scheduleTaskExecutor = Executors.newScheduledThreadPool(1);
-        scheduleTaskExecutor.scheduleAtFixedRate(new Runnable() {
-            @Override
-            public void run() {runOnUiThread(() -> {
-                if(clear.get()) {
-                    List<Classifier.Recognition> list = new ArrayList<Classifier.Recognition>(cacheResults.values());
-                    tracker.trackResults(list, 0);
-                    trackingOverlay.postInvalidate();
-                    cacheResults.clear();
-                    cacheCounter = 0;
-                    System.out.println("Clear");
-                }
-            });
-            }
-        }, 0, 2, TimeUnit.SECONDS); // or .MINUTES, .HOURS etc.
-
-
-    }
 
     @Override
     public void onPreviewSizeChosen(final Size size, final int rotation) {
@@ -160,7 +145,7 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
                     }
                 });
         tracker.setFrameConfiguration(previewWidth, previewHeight, sensorOrientation);
-        createClearTimer();
+
     }
 
     @Override
@@ -184,67 +169,92 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
         runInBackground(() -> {
 
             final List<Classifier.Recognition> results = detector.recognizeImage(croppedBitmap,rgbFrameBitmap);
-            cropCopyBitmap = Bitmap.createBitmap(croppedBitmap);
+            //cropCopyBitmap = Bitmap.createBitmap(croppedBitmap);
+            //rgbFrameBitmap = changeColorOpenCv(rgbFrameBitmap);
+            rgbFrameBitmap = changeColorC(rgbFrameBitmap);
 
-            //final List<Classifier.Recognition> mappedRecognitions = new LinkedList<Classifier.Recognition>();
+            final List<Classifier.Recognition> mappedRecognitions = new LinkedList<Classifier.Recognition>();
             for (final Classifier.Recognition result : results) {
                 final RectF location = result.getLocation();
                 result.setLocation(location);
                 //mappedRecognitions.add(result);
                 Bitmap bitmap = getCropBitmap(rgbFrameBitmap,result.getLocation(),false);
                 String barcode = decode(bitmap);
-                if(barcode==null){
-                    bitmap = getCropBitmap(rgbFrameBitmap,result.getLocation(),true);
-                    barcode = decode(bitmap);
-                    if(barcode!=null) {
-                        cacheResults.put(barcode, result);
-                        CameraActivity.addBarcode(barcode);
-                        clear.set(false);
-                    }
-                }else{
-                    cacheResults.put(barcode,result);
+                if(barcode!=null){
+                    mappedRecognitions.add(result);
                     CameraActivity.addBarcode(barcode);
-                    clear.set(false);
+                }else{
+                    //ImageUtils.saveBitmap(bitmap,(new Random()).nextInt()+".jpg");
+                    //ImageUtils.saveBitmap(rgbFrameBitmap,(new Random()).nextInt()+"_full.jpg");
                 }
             }
-            if(results.size()>0){
-                List<Classifier.Recognition> list = new ArrayList<Classifier.Recognition>(cacheResults.values());
-                tracker.trackResults(list, currTimestamp);
-                trackingOverlay.postInvalidate();
-            }else{
-                clear.set(true);
-            }
+
+            tracker.trackResults(mappedRecognitions, currTimestamp);
+            trackingOverlay.postInvalidate();
+
             computingDetection=false;
         });
     }
 
-    private Bitmap getCropBitmap(Bitmap source, RectF cropRectF,boolean threshold) {
-        float width=0;
-        float height=0;
 
-        if(cropRectF.width()+75<source.getWidth()) {
-            width = cropRectF.width() + 75;
-        }else{
-            width = source.getWidth();
-        }
+    private Bitmap changeColorOpenCv(final Bitmap source){
+        Mat imageMat = new Mat();
+        Utils.bitmapToMat(source, imageMat);
+        Imgproc.cvtColor(imageMat, imageMat, Imgproc.COLOR_BGR2GRAY);
+        Core.normalize(imageMat, imageMat, 0, 255, Core.NORM_MINMAX);
 
-        if(cropRectF.height()+75<source.getHeight()) {
-            height = cropRectF.height() + 75;
-        }else {
-            height = source.getHeight();
-        }
+        Mat kernel = new Mat(new org.opencv.core.Size(1, 1), CvType.CV_8U, new Scalar(255));
+        Imgproc.morphologyEx(imageMat, imageMat, Imgproc.MORPH_OPEN, kernel);
+        Imgproc.morphologyEx(imageMat, imageMat, Imgproc.MORPH_CLOSE, kernel);
+        Imgproc.adaptiveThreshold(imageMat, imageMat, 255, Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C,Imgproc.THRESH_BINARY, 41, 20);
 
-        Bitmap resultBitmap = Bitmap.createBitmap((int) width, (int)height, Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(imageMat, source);
+        return  source;
+    }
+
+    private Bitmap changeColorC(final Bitmap source){
+        int _width = source.getWidth();
+        int _height = source.getHeight();
+        int[] pixels = new int[_width * _height];
+
+        source.getPixels(pixels, 0, _width, 0, 0, _width, _height);
+        NativeImageProcessor.doContrast(pixels, _width, _height);
+        source.setPixels(pixels, 0, _width, 0, 0, _width, _height);
+        return source;
+    }
+
+    private Bitmap getCropBitmap(final Bitmap source, RectF cropRectF,boolean threshold) {
+
+        Bitmap resultBitmap = Bitmap.createBitmap((int) cropRectF.width(), (int)cropRectF.height(), Bitmap.Config.ARGB_8888);
         Canvas cavas = new Canvas(resultBitmap);
 
         Paint paint = new Paint(Paint.FILTER_BITMAP_FLAG);
         paint.setColor(Color.WHITE);
 
-        cavas.drawRect(new RectF(0, 0, width, height), paint);
+        cavas.drawRect(new RectF(0, 0, cropRectF.width(), cropRectF.height()), paint);
+
 
         Matrix matrix = new Matrix();
-        matrix.postTranslate(-cropRectF.left+50, -cropRectF.top+50);
+        matrix.postTranslate(-cropRectF.left, -cropRectF.top);
         cavas.drawBitmap(source, matrix, paint);
+
+        //resultBitmap  = ScaleImage.resizeBitmap(resultBitmap);
+
+        /*
+        Random random = new Random();
+        int rand = random.nextInt();
+        ImageUtils.saveBitmap(bmp,rand+"_once.jpg");
+
+        int _width = bmp.getWidth();
+        int _height = bmp.getHeight();
+        int[] pixels = new int[_width * _height];
+
+        bmp.getPixels(pixels, 0, _width, 0, 0, _width, _height);
+        NativeImageProcessor.doContrast(pixels, _width, _height);
+        bmp.setPixels(pixels, 0, _width, 0, 0, _width, _height);
+        ImageUtils.saveBitmap(bmp,rand+"_sonra.png");
+
+
 
         if(threshold) {
             Mat imageMat = new Mat();
@@ -259,6 +269,7 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
 
             Utils.matToBitmap(imageMat, resultBitmap);
         }
+         */
 
         return resultBitmap;
     }
@@ -273,7 +284,6 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
             return null;
         }
     }
-
 
     @Override
     protected int getLayoutId() {
